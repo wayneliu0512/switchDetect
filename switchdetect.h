@@ -25,6 +25,8 @@ public:
 
     void resultMatching();
 
+    bool distanceAllowRange(const Point &point, int distance);
+
     QList<Square> *getOutputList();
 
 private:

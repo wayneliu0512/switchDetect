@@ -6,6 +6,9 @@ switchStateDetect::switchStateDetect()
 
 void switchStateDetect::doSwitchStateDetect(Mat cut, switchDirection direction, QList<Square> *inputList)
 {
+    static int count = 0;
+    count++;
+
     Mat cut_gray;
     cvtColor(cut, cut_gray, COLOR_BGR2GRAY);
     blur(cut_gray, cut_gray, Size(3,3));
@@ -14,10 +17,20 @@ void switchStateDetect::doSwitchStateDetect(Mat cut, switchDirection direction, 
     vector<vector<Point> > contours;
     vector<Vec4i> hierarchy;
 
-    int thresh = 225;
+    //I got some problem here , So thresh value can't too high.
+    int thresh = 195;
 
     threshold(cut_gray, threshold_output, thresh, 255, THRESH_BINARY);
+    namedWindow(QString::number(count).toStdString() + "thresh", WINDOW_FREERATIO);
+    imshow(QString::number(count).toStdString() + "thresh", threshold_output);
     findContours( threshold_output, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE, Point(0, 0) );
+
+    //ERROR
+    if(contours.size() < 2)
+    {
+        inputList->last().switchState = "ERROR: contours less than two.(Try to adjust threshold)";
+        return;
+    }
 
     vector<vector<Point> > contours_poly( contours.size() );
     vector<Rect> boundRect( contours.size() );
@@ -26,7 +39,6 @@ void switchStateDetect::doSwitchStateDetect(Mat cut, switchDirection direction, 
 
     double maxContourArea[2] = {0, 0};
     int maxContour[2];
-
     //Find max 2 contour & contour area
     for(size_t i = 0; i < contours.size(); i++)
     {
@@ -52,12 +64,29 @@ void switchStateDetect::doSwitchStateDetect(Mat cut, switchDirection direction, 
         }
     }
 
-    minEnclosingCircle( contours_poly[maxContour[0]], center[maxContour[0]], radius[maxContour[0]] );
+    //ERROR
+    for(size_t i = 0; i < 2; i++)
+    {
+        if(maxContourArea[i] <= 35 )
+        {
+            inputList->last().switchState = "ERROR: ContourArea too small.(Try to adjust threshold)";
+            return;
+        }else if(maxContourArea[i] >= 200)
+        {
+            inputList->last().switchState = "ERROR: ContourArea too big.(Try to adjust threshold)";
+            return;
+        }
+    }
 
-    minEnclosingCircle( contours_poly[maxContour[1]], center[maxContour[1]], radius[maxContour[1]] );
+//    cout << count << "Area:" << maxContourArea[0] << endl;
+//    cout << count << "Area1:" << maxContourArea[1] << endl;
+
+//    minEnclosingCircle( contours_poly[maxContour[0]], center[maxContour[0]], radius[maxContour[0]] );
+//    minEnclosingCircle( contours_poly[maxContour[1]], center[maxContour[1]], radius[maxContour[1]] );
 
     Point loc1 = center[maxContour[0]];
     Point loc2 = center[maxContour[1]];
+
 
     if(direction == VERTICAL)
     {
@@ -92,4 +121,5 @@ void switchStateDetect::doSwitchStateDetect(Mat cut, switchDirection direction, 
             else{ inputList->last().switchState = "Error";}
         }
     }
+
 }

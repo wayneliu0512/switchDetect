@@ -11,29 +11,33 @@ switchDetect::switchDetect(Mat temp_H_, Mat temp_V_, Mat ref_, int switchNum_)
     Mat gref;
 
 
+    gref = ref;
+    gtempH = temp_H_;
+    gtempV = temp_V_;
+
 //    cvtColor(ref, gref, COLOR_BGR2GRAY);
 //    cvtColor(temp_H_, gtempH, COLOR_BGR2GRAY);
 //    cvtColor(temp_V_, gtempV, COLOR_BGR2GRAY);
 
-    threshold(ref, gref, 100, 255, CV_THRESH_TOZERO);
-    threshold(temp_H_, gtempH, 100, 255, CV_THRESH_TOZERO);
-    threshold(temp_V_, gtempV, 100, 255, CV_THRESH_TOZERO);
+//    threshold(gref, gref, 100, 255, CV_THRESH_TOZERO);
+//    threshold(gtempH, gtempH, 100, 255, CV_THRESH_TOZERO);
+//    threshold(gtempV, gtempV, 100, 255, CV_THRESH_TOZERO);
 
-    namedWindow("ref", WINDOW_FREERATIO);
-    imshow("ref", gref);
-    namedWindow("tempH", WINDOW_FREERATIO);
-    imshow("tempH", gtempH);
-    namedWindow("tempV", WINDOW_FREERATIO);
-    imshow("tempV", gtempV);
+//    namedWindow("ref", WINDOW_FREERATIO);
+//    imshow("ref", gref);
+//    namedWindow("tempH", WINDOW_FREERATIO);
+//    imshow("tempH", gtempH);
+//    namedWindow("tempV", WINDOW_FREERATIO);
+//    imshow("tempV", gtempV);
 
     //TemplateMatching...
     resV = Mat(ref.rows-temp_V_.rows+1, ref.cols-temp_V_.cols+1, CV_32FC1);
     matchTemplate(gref, gtempV, resV, CV_TM_CCOEFF_NORMED);
-    threshold(resV, resV, 0.4, 1., CV_THRESH_TOZERO);
+    threshold(resV, resV, 0.3, 1., CV_THRESH_TOZERO);
 
     resH = Mat(ref.rows-temp_H_.rows+1, ref.cols-temp_H_.cols+1, CV_32FC1);
     matchTemplate(gref, gtempH, resH, CV_TM_CCOEFF_NORMED);
-    threshold(resH, resH, 0.4, 1., CV_THRESH_TOZERO);
+    threshold(resH, resH, 0.3, 1., CV_THRESH_TOZERO);
 
 
     namedWindow("H", WINDOW_FREERATIO);
@@ -58,9 +62,14 @@ void switchDetect::startDetect()
         Rect rectH(Point(maxlocH.x + (gtempH.cols/3), maxlocH.y), Point(maxlocH.x + (gtempH.cols*0.6), maxlocH.y + gtempH.rows));
 
         if (count < switchNum)
-        {
+        {           
             if(maxvalV >= maxvalH)
             {
+                if(!distanceAllowRange(maxlocV, 80))
+                {
+                    floodFill(resV, maxlocV, Scalar(0), 0, Scalar(.1), Scalar(1.));
+                    continue;
+                }
                 inputList->append(Square(maxlocV));
                 inputList->last().setCenterPoint(Point(maxlocV.x +  gtempV.cols/2, maxlocV.y + gtempV.rows/2));
                 cutV = ref(rectV).clone();
@@ -69,6 +78,11 @@ void switchDetect::startDetect()
                 switchStateDetect::doSwitchStateDetect(cutV, switchStateDetect::VERTICAL, inputList);
             }else if(maxvalV <= maxvalH)
             {
+                if(!distanceAllowRange(maxlocH, 80))
+                {
+                    floodFill(resH, maxlocH, Scalar(0), 0, Scalar(.1), Scalar(1.));
+                    continue;
+                }
                 inputList->append(Square(maxlocH));
                 inputList->last().setCenterPoint(Point(maxlocH.x +  gtempH.cols/2, maxlocH.y + gtempH.rows/2));
                 cutH = ref(rectH).clone();
@@ -77,9 +91,10 @@ void switchDetect::startDetect()
                 switchStateDetect::doSwitchStateDetect(cutH, switchStateDetect::HORIZONTAL, inputList);
             }
             count++;
+
         }
         else
-        {
+        {            
             break;
         }
     }
@@ -208,4 +223,23 @@ void switchDetect::resultMatching()
             qDebug() << "Sample:" << nearestLoad.switchState << " <=> " << "Result:" << nearestIn.switchState << "____FAIL";
         }
     }
+}
+
+bool switchDetect::distanceAllowRange(const Point &point, int distance)
+{
+    if(inputList->empty())
+    {
+        return true;
+    }
+
+    for(int i = 0 ; i < inputList->length(); i++)
+    {
+        QPoint dis = inputList->at(i).getQPoint() - QPoint(point.x, point.y);
+        int range = dis.manhattanLength();
+        if(range <= distance)
+        {
+            return false;
+        }
+    }
+    return true;
 }

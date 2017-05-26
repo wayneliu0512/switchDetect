@@ -26,6 +26,7 @@ public:
     Point location;
     int x;
     int y;
+    int thresh;
     QString switchState;
 
 private:
