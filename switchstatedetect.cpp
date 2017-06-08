@@ -6,120 +6,172 @@ switchStateDetect::switchStateDetect()
 
 void switchStateDetect::doSwitchStateDetect(Mat cut, switchDirection direction, QList<Square> *inputList)
 {
-    static int count = 0;
-    count++;
+    Mat ROI, ROI1, ref, ref_gray, ref_gray_thresh;
+    Rect re1, re;
+    QString right, left;
+    int threshR = 200, threshL = 200 , thresh = 0;
+    ref = cut;
+    cvtColor(ref, ref_gray, COLOR_BGR2GRAY);
+    blur(ref_gray, ref_gray, Size(3,3));
 
-    Mat cut_gray;
-    cvtColor(cut, cut_gray, COLOR_BGR2GRAY);
-    blur(cut_gray, cut_gray, Size(3,3));
+    threshold(ref_gray, ref_gray_thresh, thresh, 255, THRESH_BINARY | THRESH_OTSU);
 
-    Mat threshold_output;
     vector<vector<Point> > contours;
-    vector<Vec4i> hierarchy;
 
-    //I got some problem here , So thresh value can't too high.
-    int thresh = 195;
+    findContours(ref_gray_thresh, contours, RETR_TREE, CHAIN_APPROX_SIMPLE, Point(0, 0));
 
-    threshold(cut_gray, threshold_output, thresh, 255, THRESH_BINARY);
-    namedWindow(QString::number(count).toStdString() + "thresh", WINDOW_FREERATIO);
-    imshow(QString::number(count).toStdString() + "thresh", threshold_output);
-    findContours( threshold_output, contours, hierarchy, RETR_TREE, CHAIN_APPROX_SIMPLE, Point(0, 0) );
-
-    //ERROR
-    if(contours.size() < 2)
-    {
-        inputList->last().switchState = "ERROR: contours less than two.(Try to adjust threshold)";
-        return;
-    }
-
-    vector<vector<Point> > contours_poly( contours.size() );
     vector<Rect> boundRect( contours.size() );
-    vector<Point2f>center( contours.size() );
-    vector<float>radius( contours.size() );
-
-    double maxContourArea[2] = {0, 0};
-    int maxContour[2];
-    //Find max 2 contour & contour area
-    for(size_t i = 0; i < contours.size(); i++)
-    {
-        approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
-        double temp = contourArea(contours_poly[i]);
-
-        if(temp > maxContourArea[0])
-        {
-            maxContourArea[0] = temp;
-            maxContour[0] = i;
-        }
-    }
-    for(size_t i = 0; i < contours.size(); i++)
-    {
-        double temp = contourArea(contours_poly[i]);
-        if(i == maxContour[0])
-        {
-            temp = 0;
-        }else if(temp > maxContourArea[1])
-        {
-            maxContourArea[1] = temp;
-            maxContour[1] = i;
-        }
-    }
-
-    //ERROR
-    for(size_t i = 0; i < 2; i++)
-    {
-        if(maxContourArea[i] <= 35 )
-        {
-            inputList->last().switchState = "ERROR: ContourArea too small.(Try to adjust threshold)";
-            return;
-        }else if(maxContourArea[i] >= 200)
-        {
-            inputList->last().switchState = "ERROR: ContourArea too big.(Try to adjust threshold)";
-            return;
-        }
-    }
-
-//    cout << count << "Area:" << maxContourArea[0] << endl;
-//    cout << count << "Area1:" << maxContourArea[1] << endl;
-
-//    minEnclosingCircle( contours_poly[maxContour[0]], center[maxContour[0]], radius[maxContour[0]] );
-//    minEnclosingCircle( contours_poly[maxContour[1]], center[maxContour[1]], radius[maxContour[1]] );
-
-    Point loc1 = center[maxContour[0]];
-    Point loc2 = center[maxContour[1]];
-
 
     if(direction == VERTICAL)
     {
-        if(loc1.x > loc2.x)
+        for(int i=0;i<contours.size();i++)
         {
-            if(loc1.y - loc2.y >= 10){ inputList->last().switchState = "NY-O1";}
-            else if(loc2.y - loc1.y >= 10){ inputList->last().switchState = "N1-OY";}
-            else if((loc1.y + loc2.y) >= threshold_output.rows){inputList->last().switchState = "N1-O1";}
-            else if((loc1.y + loc2.y) <= threshold_output.rows){ inputList->last().switchState = "NY-OY";}
-            else{ inputList->last().switchState = "Error";}
-        }else{
-            if(loc2.y - loc1.y >= 10){ inputList->last().switchState = "NY-O1";}
-            else if(loc1.y - loc2.y >= 10){ inputList->last().switchState = "N1-OY";}
-            else if((loc1.y + loc2.y) >= threshold_output.rows){ inputList->last().switchState = "N1-O1";}
-            else if((loc1.y + loc2.y) <= threshold_output.rows){ inputList->last().switchState = "NY-OY";}
-            else{ inputList->last().switchState = "Error";}
+            boundRect[i] = boundingRect(contours[i]);//enclose in Rect
+            Rect rex;
+            if(boundRect[i].width>14 && boundRect[i].height>30)//ignore noise rects
+            {
+                rex = boundRect[i];
+                if( rex.x < ref_gray_thresh.cols/2)
+                {
+                    re1 = boundRect[i];
+                    ROI1=ref_gray(boundRect[i]);
+                }else
+                {
+                    re = boundRect[i];
+                    ROI=ref_gray(boundRect[i]);
+                }
+            }
+            if((!ROI.empty()) && (!ROI1.empty())){  break;}
         }
-    }else if(direction == HORIZONTAL)
-    {
-        if(loc1.y > loc2.y)
+
+        if(ROI.empty() || ROI1.empty() )
         {
-            if(loc2.x - loc1.x >= 10){ inputList->last().switchState = "NY-O1";}
-            else if(loc1.x - loc2.x >= 10){ inputList->last().switchState = "N1-OY";}
-            else if((loc1.x + loc2.x) >= threshold_output.cols){ inputList->last().switchState = "N1-O1";}
-            else if((loc1.x + loc2.x) <= threshold_output.cols){ inputList->last().switchState = "NY-OY";}
-            else{ inputList->last().switchState = "Error";}
-        }else{
-            if(loc1.x - loc2.x >= 10){ inputList->last().switchState = "NY-O1";}
-            else if(loc2.x - loc1.x >= 10){ inputList->last().switchState = "N1-OY";}
-            else if((loc1.x + loc2.x) >= threshold_output.cols){ inputList->last().switchState = "N1-O1";}
-            else if((loc1.x + loc2.x) <= threshold_output.cols){ inputList->last().switchState = "NY-OY";}
-            else{ inputList->last().switchState = "Error";}
+            cout << "error1" << endl;
+            return exit(1);
+        }
+
+        boundRect.clear();
+        contours.clear();
+
+        threshR = (ref_gray.at<uchar>(re.y+(re.height/4*3), re.x+(re.width/2)) + ref_gray.at<uchar>(re.y+(re.height/4), re.x+(re.width/2)))/2;
+        threshL = (ref_gray.at<uchar>(re1.y+(re1.height/4*3), re1.x+(re.width/2)) + ref_gray.at<uchar>(re1.y+(re1.height/4), re1.x+(re1.width/2)))/2;
+
+        threshold(ROI, ROI, threshR, 255, THRESH_BINARY);
+        threshold(ROI1, ROI1, threshL, 255, THRESH_BINARY);
+
+        right = rollMat(1, ROI, ROI1);
+        left = rollMat(0, ROI, ROI1);
+    }else
+    {
+        for(int i=0;i<contours.size();i++)
+        {
+            boundRect[i] = boundingRect(contours[i]);//enclose in Rect
+            Rect rex;
+            if(boundRect[i].width>30 && boundRect[i].height>14)//ignore noise rects
+            {
+                rex = boundRect[i];
+                if( rex.y > ref_gray_thresh.rows/2)
+                {
+                    re1 = boundRect[i];
+                    ROI1=ref_gray(boundRect[i]);
+                }else
+                {
+                    re = boundRect[i];
+                    ROI=ref_gray(boundRect[i]);
+                }
+            }
+            if((!ROI.empty()) && (!ROI1.empty())){  break;}
+        }
+
+        if(ROI.empty() || ROI1.empty() )
+        {
+            cout << "error1" << endl;
+            return exit(1);
+        }
+
+        boundRect.clear();
+        contours.clear();
+
+        threshR = (ref_gray.at<uchar>(re.y+(re.height/2), re.x+(re.width/4*3)) + ref_gray.at<uchar>(re.y+(re.height/2), re.x+(re.width/4)))/2;
+        threshL = (ref_gray.at<uchar>(re1.y+(re1.height/2), re1.x+(re.width/4*3)) + ref_gray.at<uchar>(re1.y+(re1.height/2), re1.x+(re1.width/4)))/2;
+
+        threshold(ROI, ROI, threshR, 255, THRESH_BINARY);
+        threshold(ROI1, ROI1, threshL, 255, THRESH_BINARY);
+
+        right = rollMat(3, ROI, ROI1);
+        left = rollMat(2, ROI, ROI1);
+    }
+
+
+    if(right == "up" && left == "up")
+    {
+        inputList->last().switchState = "^^";
+    }
+    else if(right == "up" && left == "down")
+    {
+        inputList->last().switchState = "v^";
+    }
+    else if(right == "down" && left == "up")
+    {
+        inputList->last().switchState = "^v";
+    }
+    else if(right == "down" && left == "down")
+    {
+        inputList->last().switchState = "vv";
+    }
+
+    namedWindow("Right", WINDOW_FREERATIO);
+    imshow("Right",ROI);
+
+    namedWindow("Left", WINDOW_FREERATIO);
+    imshow("Left",ROI1);
+}
+
+QString switchStateDetect::rollMat(int direction, Mat ROI, Mat ROI1)
+{
+    Mat_<uchar>::iterator it;
+    Mat_<uchar>::iterator itend;
+    int Ucount = 0 , Dcount =0;
+
+    if(direction == 1 || direction == 3)
+    {
+        it = ROI.begin<uchar>();
+        itend = ROI.end<uchar>();
+    }else
+    {
+        it = ROI1.begin<uchar>();
+        itend = ROI1.end<uchar>();
+    }
+
+    if(direction == 0 || direction == 1)
+    {
+        for(;it!=itend;it++){
+            if(*it == 255 && (it.pos().y > ROI.rows/2))
+            {
+                Dcount++;
+            }else if(*it == 255 && (it.pos().y < ROI.rows/2))
+            {
+                Ucount++;
+            }
+        }
+    }else
+    {
+        for(;it!=itend;it++){
+            if(*it == 255 && (it.pos().x > ROI.cols/2))
+            {
+                Dcount++;
+            }else if(*it == 255 && (it.pos().x < ROI.cols/2))
+            {
+                Ucount++;
+            }
         }
     }
 
+
+    if(Ucount > Dcount)
+    {
+        return "up";
+    }else{
+        return "down";
+    }
 }

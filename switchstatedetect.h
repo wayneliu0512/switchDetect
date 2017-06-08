@@ -16,6 +16,9 @@ public:
 
     enum switchDirection{  VERTICAL = 0, HORIZONTAL};
 
+    //Vertical : right = 1, left = 0   Horizontal : right = 3, left = 2
+    static QString rollMat(int direction , Mat ROI , Mat ROI1);
+
     static void doSwitchStateDetect(Mat cut, switchDirection direction, QList<Square> *inputList);
 
 };
